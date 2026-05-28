@@ -76,7 +76,7 @@
         <div class="user-actions">
           <span class="user-chip" id="currentUserChip"></span>
           <button class="ghost-button" id="changePasswordBtn" type="button">เปลี่ยนรหัสผ่าน</button>
-          <button class="ghost-button admin-only" id="syncSettingsBtn" type="button">ตั้งค่า Sheet</button>
+          <button class="ghost-button" id="syncSettingsBtn" type="button">ตั้งค่า Sheet</button>
           <button class="danger-button" id="logoutBtn" type="button">ออกจากระบบ</button>
         </div>
       </header>
@@ -313,9 +313,9 @@
     <dialog id="settingsDialog">
       <form method="dialog" class="settings-card">
         <h2>ตั้งค่าการบันทึก Google Sheet</h2>
-        <p>Sheet ID ถูกใส่ไว้แล้ว ต้อง deploy ไฟล์ <code>google-apps-script/Code.gs</code> เป็น Web App แล้วนำ URL มาวางที่นี่</p>
+        <p>ต้องตั้งค่านี้ในมือถือ/คอมแต่ละเครื่องครั้งแรก เพราะ browser แต่ละเครื่องเก็บค่าแยกกัน วาง Apps Script Web App URL ที่ deploy แล้วเพื่อส่งข้อมูลเข้า Google Sheet</p>
         <label>Google Sheet ID<input id="sheetId" value="1yydaayto6uVSTJ8Qav84kBcZ_HDQiBGKBIkBOGjlBvU" /></label>
-        <label>Apps Script Web App URL<input id="webAppUrl" placeholder="https://script.google.com/macros/s/AKfycbwzBUy5La2nQ7TbOhtCrhDBIit5fVm_xwraJObVKpUa8uAEa5T6etromsfdyFyWEH5z/exec" /></label>
+        <label>Apps Script Web App URL<input id="webAppUrl" value="https://script.google.com/macros/s/AKfycbwzBUy5La2nQ7TbOhtCrhDBIit5fVm_xwraJObVKpUa8uAEa5T6etromsfdyFyWEH5z/exec" placeholder="https://script.google.com/macros/s/.../exec" /></label>
         <menu>
           <button class="ghost-button" value="cancel">ยกเลิก</button>
           <button class="primary-button" id="saveSettings" value="default">บันทึก</button>

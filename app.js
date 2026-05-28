@@ -4,10 +4,11 @@ const SETTINGS_KEY = "khamyai.ncd.settings";
 const USERS_KEY = "khamyai.ncd.users";
 const SESSION_KEY = "khamyai.ncd.session";
 const DEFAULT_SHEET_ID = "1yydaayto6uVSTJ8Qav84kBcZ_HDQiBGKBIkBOGjlBvU";
+const DEFAULT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwzBUy5La2nQ7TbOhtCrhDBIit5fVm_xwraJObVKpUa8uAEa5T6etromsfdyFyWEH5z/exec";
 
 let population = readJson(POPULATION_KEY, []);
 let records = readJson(RECORDS_KEY, []);
-let settings = readJson(SETTINGS_KEY, { sheetId: DEFAULT_SHEET_ID, webAppUrl: "" });
+let settings = readJson(SETTINGS_KEY, { sheetId: DEFAULT_SHEET_ID, webAppUrl: DEFAULT_WEB_APP_URL });
 let users = readJson(USERS_KEY, []);
 let session = readJson(SESSION_KEY, null);
 let currentUser = null;
@@ -21,7 +22,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupLogoFallbacks();
   bindEvents();
   $("#sheetId").value = settings.sheetId || DEFAULT_SHEET_ID;
-  $("#webAppUrl").value = settings.webAppUrl || "";
+  if (!settings.webAppUrl) {
+    settings.webAppUrl = DEFAULT_WEB_APP_URL;
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }
+  $("#webAppUrl").value = settings.webAppUrl || DEFAULT_WEB_APP_URL;
   $("[name='screeningDate']").valueAsDate = new Date();
   await restoreSession();
   if (!population.length) await loadBundledPopulation({ silent: true });
@@ -147,6 +152,10 @@ function showApp() {
       $("#passwordDialog").showModal();
       showToast("กรุณาเปลี่ยนรหัสผ่านเริ่มต้นก่อนใช้งานต่อ", "warning");
     }, 300);
+  } else if (!settings.webAppUrl) {
+    setTimeout(() => {
+      showToast("มือถือ/เครื่องนี้ยังไม่ได้ตั้งค่า Apps Script Web App URL ข้อมูลจะยังไม่ส่งเข้า Google Sheet", "warning");
+    }, 500);
   }
   renderAll();
 }
