@@ -1,0 +1,3 @@
+username,password,fullName,role,status,volunteerName
+v001,123456,นาย/นาง ตัวอย่าง อสม.,volunteer,active,นาย/นาง ตัวอย่าง อสม.
+staff01,123456,เจ้าหน้าที่ตัวอย่าง,admin,active,
