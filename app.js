@@ -31,6 +31,7 @@ function bindEvents() {
   $$(".auth-tab").forEach((tab) => tab.addEventListener("click", () => switchAuthTab(tab.dataset.authTab)));
   $("#loginForm").addEventListener("submit", handleLogin);
   $("#registerForm").addEventListener("submit", handleRegister);
+  $("#resetLocalLoginBtn").addEventListener("click", resetLocalLoginData);
   $("#logoutBtn").addEventListener("click", confirmLogout);
   $("#changePasswordBtn").addEventListener("click", () => $("#passwordDialog").showModal());
   $("#passwordForm").addEventListener("submit", handleChangePassword);
@@ -54,6 +55,24 @@ function bindEvents() {
   });
 }
 
+async function resetLocalLoginData() {
+  const confirmed = await sweetConfirm({
+    title: "ล้างข้อมูลเข้าสู่ระบบ?",
+    message: "จะลบบัญชีและ session ที่ค้างใน browser นี้ แล้วสร้าง admin เริ่มต้นใหม่ ข้อมูลคัดกรองในเครื่องจะไม่ถูกลบ",
+    type: "warning",
+    confirmText: "ล้างข้อมูล",
+    cancelText: "ยกเลิก",
+  });
+  if (!confirmed) return;
+  localStorage.removeItem(USERS_KEY);
+  localStorage.removeItem(SESSION_KEY);
+  users = [];
+  session = null;
+  currentUser = null;
+  await bootstrapUsers();
+  showToast("ล้างข้อมูลเข้าสู่ระบบแล้ว ใช้ admin / 123456 เพื่อเข้าใหม่", "success");
+}
+
 function setupLogoFallbacks() {
   document.querySelectorAll(".logo-frame img").forEach((image) => {
     image.addEventListener("error", () => {
@@ -66,8 +85,7 @@ function setupLogoFallbacks() {
 }
 
 async function bootstrapUsers() {
-  if (users.length) return;
-  users = [{
+  const adminUser = {
     id: createId(),
     username: "admin",
     passwordHash: await hashPassword("123456"),
@@ -78,8 +96,29 @@ async function bootstrapUsers() {
     createdAt: new Date().toISOString(),
     approvedAt: new Date().toISOString(),
     mustChangePassword: true,
-  }];
-  saveUsers();
+  };
+
+  const existingAdmin = users.find((user) => user.username === "admin");
+  if (!users.length) {
+    users = [adminUser];
+    saveUsers();
+    return;
+  }
+
+  if (!existingAdmin) {
+    users.unshift(adminUser);
+    saveUsers();
+    return;
+  }
+
+  if (existingAdmin.status !== "active" || existingAdmin.role !== "admin") {
+    Object.assign(existingAdmin, {
+      role: "admin",
+      status: "active",
+      approvedAt: existingAdmin.approvedAt || new Date().toISOString(),
+    });
+    saveUsers();
+  }
 }
 
 async function restoreSession() {
