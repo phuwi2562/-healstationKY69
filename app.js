@@ -169,9 +169,9 @@ async function handleLogin(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
   const username = cleanUsername(form.get("username"));
-  const passwordHash = await hashPassword(form.get("password"));
+  const password = String(form.get("password") || "");
   const user = users.find((item) => item.username === username);
-  if (!user || user.passwordHash !== passwordHash) {
+  if (!user || !(await verifyPassword(password, user))) {
     showToast("Username หรือ Password ไม่ถูกต้อง", "error");
     return;
   }
@@ -221,10 +221,10 @@ async function handleRegister(event) {
 async function handleChangePassword(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
-  const oldPasswordHash = await hashPassword(form.get("oldPassword"));
+  const oldPassword = String(form.get("oldPassword") || "");
   const newPassword = String(form.get("newPassword") || "");
   const confirmPassword = String(form.get("confirmPassword") || "");
-  if (currentUser.passwordHash !== oldPasswordHash) {
+  if (!(await verifyPassword(oldPassword, currentUser))) {
     showToast("รหัสผ่านเดิมไม่ถูกต้อง", "error");
     return;
   }
@@ -234,6 +234,8 @@ async function handleChangePassword(event) {
   }
   updateUser(currentUser.id, {
     passwordHash: await hashPassword(newPassword),
+    salt: "",
+    hashSource: "ncd-app",
     mustChangePassword: false,
     passwordChangedAt: new Date().toISOString(),
   });
@@ -299,22 +301,39 @@ async function handleUsersCsvUpload(event) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = async () => {
-    const rows = parseCsv(String(reader.result));
+    const rows = parseDelimitedText(String(reader.result));
     let imported = 0;
     for (const row of rows) {
       const username = cleanUsername(row.username || row.Username || row["username"]);
       const password = row.password || row.Password || row["password"];
-      if (!username || !password) continue;
+      const passwordHash = row.passwordHash || row["passwordHash"] || row["รหัสผ่านเข้ารหัส"] || "";
+      const salt = row.salt || row["salt"] || "";
+      if (!username || (!password && !passwordHash)) continue;
+      const fullName = normalizeFullName(row);
+      const role = normalizeRole(row.role || row["role"] || row["บทบาท"] || "volunteer");
+      const approved = normalizeBool(row.approved || row["approved"] || row["อนุมัติ"]);
+      const status = normalizeStatus(row.status || row["status"] || row["สถานะ"], approved);
       const user = {
-        id: createId(),
+        id: row.id || row["id"] || createId(),
         username,
-        passwordHash: await hashPassword(password),
-        fullName: row.fullName || row["ชื่อ-สกุล"] || row["ชื่อ"] || username,
-        role: row.role || row["บทบาท"] || "volunteer",
-        status: row.status || row["สถานะ"] || "active",
+        passwordHash: passwordHash || await hashPassword(password),
+        salt,
+        hashSource: passwordHash ? "house-survey-app" : "ncd-app",
+        prefix: row.prefix || row["คำนำหน้า"] || "",
+        firstName: row.firstName || row["ชื่อ"] || "",
+        lastName: row.lastName || row["นามสกุล"] || "",
+        phone: row.phone || row["phone"] || row["โทรศัพท์"] || "",
+        fullName: fullName || username,
+        role,
+        sourceRole: row.role || row["role"] || row["บทบาท"] || role,
+        villageNo: row.villageNo || row["villageNo"] || row["หมู่"] || "",
+        status,
+        approved,
         volunteerName: row.volunteerName || row["อสม."] || row["อสม.ที่รับผิดชอบ"] || "",
-        createdAt: new Date().toISOString(),
-        approvedAt: new Date().toISOString(),
+        createdAt: row.createdAt || row["createdAt"] || new Date().toISOString(),
+        updatedAt: row.updatedAt || row["updatedAt"] || "",
+        lastLoginAt: row.lastLoginAt || row["lastLoginAt"] || "",
+        approvedAt: approved ? new Date().toISOString() : "",
         mustChangePassword: true,
       };
       const existing = users.find((item) => item.username === username);
@@ -387,6 +406,47 @@ function parseCsv(text) {
   return rows.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
 }
 
+function parseDelimitedText(text) {
+  const clean = text.replace(/^\uFEFF/, "").trim();
+  const firstLine = clean.split(/\r?\n/, 1)[0] || "";
+  if (firstLine.includes("\t")) {
+    const rows = clean.split(/\r?\n/).filter((line) => line.trim()).map((line) => line.split("\t"));
+    const headers = rows.shift()?.map((header) => header.trim()) || [];
+    return rows.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
+  }
+  return parseCsv(clean);
+}
+
+function normalizeFullName(row) {
+  const prefix = row.prefix || row["prefix"] || row["คำนำหน้า"] || "";
+  const firstName = row.firstName || row["firstName"] || row["ชื่อ"] || "";
+  const lastName = row.lastName || row["lastName"] || row["นามสกุล"] || "";
+  return (row.fullName || row["ชื่อ-สกุล"] || `${prefix}${firstName} ${lastName}`).trim();
+}
+
+function normalizeRole(role) {
+  const value = String(role || "").trim().toLowerCase();
+  if (value === "vhv" || value === "volunteer" || value === "อสม.") return "volunteer";
+  if (value === "officer" || value === "admin" || value === "เจ้าหน้าที่" || value === "ผู้ดูแล") return "admin";
+  if (value === "public" || value === "ประชาชน") return "public";
+  return value || "volunteer";
+}
+
+function normalizeStatus(status, approved) {
+  const value = String(status || "").trim().toLowerCase();
+  if (value === "active" && approved !== false) return "active";
+  if (value === "suspended") return "suspended";
+  if (value === "pending" || approved === false) return "pending";
+  return approved === false ? "pending" : "active";
+}
+
+function normalizeBool(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (["true", "yes", "1", "อนุมัติ", "approved"].includes(text)) return true;
+  if (["false", "no", "0", "ไม่อนุมัติ", "pending"].includes(text)) return false;
+  return undefined;
+}
+
 function normalizePerson(row) {
   const firstName = row["ชื่อ"] || row.firstName || "";
   const lastName = row["นามสกุล"] || row.lastName || "";
@@ -426,6 +486,10 @@ function renderAll() {
 function visiblePopulation() {
   if (currentUser?.role === "volunteer" && currentUser.volunteerName) {
     return population.filter((person) => person.volunteer === currentUser.volunteerName);
+  }
+  if (currentUser?.role === "volunteer" && currentUser.villageNo) {
+    const villageNeedle = `หมู่ ${currentUser.villageNo}`;
+    return population.filter((person) => person.village === villageNeedle || person.village.startsWith(`${villageNeedle} `));
   }
   return population;
 }
@@ -488,7 +552,7 @@ function renderUsers() {
     <td><code>${escapeHtml(user.username)}</code></td>
     <td>${roleLabel(user.role)}</td>
     <td>${statusLabel(user.status)}${user.mustChangePassword ? " / ต้องเปลี่ยนรหัส" : ""}</td>
-    <td>${escapeHtml(user.volunteerName || "-")}</td>
+    <td>${escapeHtml(user.volunteerName || (user.villageNo ? `หมู่ ${user.villageNo}` : "-"))}</td>
     <td>
       <div class="row-actions">
         ${user.status !== "active" ? `<button class="mini-button" data-user-action="approve" data-id="${user.id}" type="button">อนุมัติ</button>` : ""}
@@ -681,15 +745,67 @@ function renderDashboard() {
   const visibleRecords = currentUser?.role === "volunteer" && currentUser.volunteerName
     ? records.filter((record) => record.volunteer === currentUser.volunteerName || record.createdByUserId === currentUser.id)
     : records;
+  const targets = visiblePopulation();
+  $("#targetPopulationRecords").textContent = targets.length.toLocaleString("th-TH");
   $("#totalRecords").textContent = visibleRecords.length.toLocaleString("th-TH");
   $("#normalRecords").textContent = visibleRecords.filter((r) => r.riskLevel === "normal").length.toLocaleString("th-TH");
   $("#riskRecords").textContent = visibleRecords.filter((r) => r.riskLevel === "risk").length.toLocaleString("th-TH");
   $("#highRecords").textContent = visibleRecords.filter((r) => r.riskLevel === "high").length.toLocaleString("th-TH");
+  renderVillageSummary(targets, visibleRecords);
   $("#reportList").innerHTML = visibleRecords.slice(0, 40).map((record) => `<article class="report-item ${record.riskLevel}">
     <strong>${escapeHtml(record.fullName)} - ${escapeHtml(record.riskLabel)}</strong>
     <span>${new Date(record.createdAt).toLocaleString("th-TH")} | ${escapeHtml(record.village)} บ้านเลขที่ ${escapeHtml(record.houseNo)} | ผู้บันทึก ${escapeHtml(record.createdByName || "-")}</span>
     <span>BMI ${record.bmi || "-"} | BP ${record.sbp}/${record.dbp} | ${escapeHtml(record.flags || "ไม่พบความเสี่ยง")}</span>
   </article>`).join("") || `<p class="muted">ยังไม่มีข้อมูลคัดกรอง</p>`;
+}
+
+function renderVillageSummary(targets, visibleRecords) {
+  const rows = new Map();
+  targets.forEach((person) => {
+    const village = person.village || "ไม่ระบุหมู่บ้าน";
+    if (!rows.has(village)) {
+      rows.set(village, { village, target: 0, screenedIds: new Set(), normal: 0, risk: 0, high: 0 });
+    }
+    rows.get(village).target += 1;
+  });
+
+  visibleRecords.forEach((record) => {
+    const village = record.village || "ไม่ระบุหมู่บ้าน";
+    if (!rows.has(village)) {
+      rows.set(village, { village, target: 0, screenedIds: new Set(), normal: 0, risk: 0, high: 0 });
+    }
+    const row = rows.get(village);
+    row.screenedIds.add(record.personId || record.recordId);
+    if (record.riskLevel === "normal") row.normal += 1;
+    if (record.riskLevel === "risk") row.risk += 1;
+    if (record.riskLevel === "high") row.high += 1;
+  });
+
+  const sortedRows = [...rows.values()].sort((a, b) => a.village.localeCompare(b.village, "th"));
+  const total = sortedRows.reduce((sum, row) => ({
+    village: "รวมทั้งหมด",
+    target: sum.target + row.target,
+    screenedIds: new Set([...sum.screenedIds, ...row.screenedIds]),
+    normal: sum.normal + row.normal,
+    risk: sum.risk + row.risk,
+    high: sum.high + row.high,
+  }), { village: "รวมทั้งหมด", target: 0, screenedIds: new Set(), normal: 0, risk: 0, high: 0 });
+
+  const tableRows = sortedRows.length ? [...sortedRows, total] : [];
+  $("#villageSummaryTable").innerHTML = tableRows.map((row) => {
+    const screened = row.screenedIds.size;
+    const percent = row.target ? ((screened / row.target) * 100).toFixed(1) : "0.0";
+    const isTotal = row.village === "รวมทั้งหมด" ? " class=\"summary-total\"" : "";
+    return `<tr${isTotal}>
+      <td>${escapeHtml(row.village)}</td>
+      <td>${row.target.toLocaleString("th-TH")}</td>
+      <td>${screened.toLocaleString("th-TH")}</td>
+      <td>${percent}%</td>
+      <td>${row.normal.toLocaleString("th-TH")}</td>
+      <td>${row.risk.toLocaleString("th-TH")}</td>
+      <td>${row.high.toLocaleString("th-TH")}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="7">ยังไม่มีข้อมูลประชากรเป้าหมาย</td></tr>`;
 }
 
 function exportRecords() {
@@ -713,6 +829,44 @@ async function hashPassword(password) {
     return `fallback:${fallbackHash(String(password))}`;
   }
   const bytes = new TextEncoder().encode(String(password));
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function verifyPassword(password, user) {
+  const savedHash = String(user.passwordHash || "");
+  if (!savedHash) return false;
+  if (savedHash === await hashPassword(password)) return true;
+  if (user.salt) {
+    const candidates = await saltedHashCandidates(password, user.salt);
+    if (candidates.includes(savedHash)) return true;
+  }
+  return false;
+}
+
+async function saltedHashCandidates(password, salt) {
+  const values = [
+    `${password}${salt}`,
+    `${salt}${password}`,
+    `${password}:${salt}`,
+    `${salt}:${password}`,
+    `${password}|${salt}`,
+    `${salt}|${password}`,
+    `${password}.${salt}`,
+    `${salt}.${password}`,
+  ];
+  const hashes = [];
+  for (const value of values) {
+    hashes.push(await sha256Hex(value));
+  }
+  return hashes;
+}
+
+async function sha256Hex(value) {
+  if (!globalThis.crypto?.subtle) {
+    return `fallback:${fallbackHash(String(value))}`;
+  }
+  const bytes = new TextEncoder().encode(String(value));
   const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }

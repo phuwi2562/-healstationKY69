@@ -426,6 +426,10 @@ input:focus, select:focus, textarea:focus {
   gap: 12px;
 }
 
+.dashboard-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .wide-label { margin-top: 14px; }
 
 .result-box {
@@ -493,14 +497,36 @@ th, td {
 
 th { background: #f2f7f5; color: var(--teal-dark); }
 
+.summary-total td {
+  background: #eef8f6;
+  color: var(--teal-dark);
+  font-weight: 900;
+}
+
 .stat-card strong {
   font-size: 36px;
   color: var(--ink);
 }
 
 .stat-card.normal { background: #edf9f3; }
+.stat-card.target { background: #eef8f6; }
 .stat-card.risk { background: #fff7e8; }
 .stat-card.high { background: #fff0f0; }
+
+.summary-section {
+  margin-top: 18px;
+}
+
+.section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 12px;
+}
+
+.section-title h3 {
+  margin-top: 0;
+}
 
 .report-list {
   display: grid;

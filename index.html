@@ -242,10 +242,35 @@
               <button class="ghost-button" id="exportCsv" type="button">ส่งออก CSV</button>
             </div>
             <div class="dashboard-grid">
-              <div class="stat-card"><span>ทั้งหมด</span><strong id="totalRecords">0</strong></div>
+              <div class="stat-card target"><span>ประชากรเป้าหมาย 35 ปีขึ้นไป</span><strong id="targetPopulationRecords">0</strong></div>
+              <div class="stat-card"><span>คัดกรองแล้ว</span><strong id="totalRecords">0</strong></div>
               <div class="stat-card normal"><span>ปกติ</span><strong id="normalRecords">0</strong></div>
               <div class="stat-card risk"><span>เสี่ยง</span><strong id="riskRecords">0</strong></div>
               <div class="stat-card high"><span>เสี่ยงสูง/ส่งต่อ</span><strong id="highRecords">0</strong></div>
+            </div>
+            <div class="summary-section">
+              <div class="section-title">
+                <div>
+                  <p class="eyebrow">แยกรายหมู่บ้าน</p>
+                  <h3>ความครอบคลุมการคัดกรองกลุ่มเป้าหมาย</h3>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>หมู่บ้าน</th>
+                      <th>เป้าหมาย 35+</th>
+                      <th>คัดกรองแล้ว</th>
+                      <th>ร้อยละ</th>
+                      <th>ปกติ</th>
+                      <th>เสี่ยง</th>
+                      <th>เสี่ยงสูง</th>
+                    </tr>
+                  </thead>
+                  <tbody id="villageSummaryTable"></tbody>
+                </table>
+              </div>
             </div>
             <div class="report-list" id="reportList"></div>
           </div>
